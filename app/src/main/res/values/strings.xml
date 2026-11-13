@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Prunelle</string>
+    <string name="tagline">Messagerie privée, chaînes &amp; création</string>
+    <string name="status_online">En ligne</string>
+    <string name="status_offline">Hors ligne</string>
+    <string name="status_syncing">Synchronisation...</string>
+    <string name="firebase_required_notice">Mode local actif — Activez Firebase dans AI Studio pour la synchronisation cloud et Gemini IA en temps réel.</string>
+</resources>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <files-path name="prunelle_files" path="." />
+    <cache-path name="prunelle_cache" path="." />
+</paths>

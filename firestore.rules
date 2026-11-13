@@ -1,0 +1,290 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOptString(data, field, maxLen) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isOptIntRange(data, field, minVal, maxVal) {
+      return !(field in data) || data[field] == null || (data[field] is int && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    function isValidPrivacyAudience(val) {
+      return val in ['NOBODY', 'CONTACTS', 'EVERYONE'];
+    }
+
+    function isValidReadStatus(val) {
+      return val in ['PENDING', 'SENT', 'DELIVERED', 'READ'];
+    }
+
+    function isValidMessageType(val) {
+      return val in ['TEXT', 'IMAGE', 'VIDEO', 'FILE', 'VOICE', 'STICKER'];
+    }
+
+    function hasValidTimestampsCreate(data) {
+      return data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function hasValidTimestampsUpdate(data) {
+      return data.createdAt == existing().createdAt &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidUserProfile(data, userId) {
+      return data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 40 &&
+             isOptString(data, 'bio', 240) &&
+             isOptString(data, 'statusText', 120) &&
+             isOptString(data, 'avatarUri', 500) &&
+             isOptIntRange(data, 'birthDay', 1, 31) &&
+             isOptIntRange(data, 'birthMonth', 1, 12) &&
+             data.birthdayPrivacy is string && isValidPrivacyAudience(data.birthdayPrivacy) &&
+             data.timezoneId is string && data.timezoneId.size() >= 1 && data.timezoneId.size() <= 64;
+    }
+
+    function isValidPrivateAccount(data, userId) {
+      return data.userId == userId &&
+             isOptString(data, 'countryCode', 12) &&
+             isOptString(data, 'phoneMasked', 32) &&
+             isOptString(data, 'email', 160) &&
+             isOptIntRange(data, 'birthYear', 1900, 2100) &&
+             data.readReceiptsEnabled is bool &&
+             isOptString(data, 'fcmToken', 512) &&
+             (!('fcmTokenUpdatedAtMs' in data) || data.fcmTokenUpdatedAtMs == null || (data.fcmTokenUpdatedAtMs is int && data.fcmTokenUpdatedAtMs >= 0));
+    }
+
+    function isValidContact(data, userId) {
+      return data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 40 &&
+             isOptString(data, 'bio', 240) &&
+             isOptString(data, 'statusText', 120) &&
+             data.isBlocked is bool &&
+             data.isReported is bool &&
+             isOptIntRange(data, 'birthDay', 1, 31) &&
+             isOptIntRange(data, 'birthMonth', 1, 12) &&
+             (!( 'birthdayPrivacy' in data ) || data.birthdayPrivacy == null || (data.birthdayPrivacy is string && isValidPrivacyAudience(data.birthdayPrivacy)));
+    }
+
+    function isValidConversation(data, userId) {
+      return data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.isGroup is bool &&
+             isOptString(data, 'description', 300) &&
+             isOptString(data, 'participantIdsCsv', 1000) &&
+             isOptString(data, 'adminIdsCsv', 500) &&
+             isOptString(data, 'lastMessagePreview', 300) &&
+             data.lastMessageTimeMs is int && data.lastMessageTimeMs >= 0 &&
+             data.unreadCount is int && data.unreadCount >= 0 && data.unreadCount <= 100000 &&
+             data.lastMessageStatus is string && isValidReadStatus(data.lastMessageStatus) &&
+             isOptString(data, 'customWallpaperId', 80);
+    }
+
+    function isValidMessage(data, userId) {
+      return data.userId == userId &&
+             data.conversationId is string && isValidId(data.conversationId) &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+             data.content is string && data.content.size() <= 4000 &&
+             data.messageType is string && isValidMessageType(data.messageType) &&
+             isOptString(data, 'mediaFileName', 200) &&
+             (!('mediaDurationMs' in data) || data.mediaDurationMs == null || (data.mediaDurationMs is int && data.mediaDurationMs >= 0)) &&
+             data.readStatus is string && isValidReadStatus(data.readStatus) &&
+             data.sentAtMs is int && data.sentAtMs >= 0 &&
+             (!('isEdited' in data) || data.isEdited == null || data.isEdited is bool) &&
+             (!('isForwarded' in data) || data.isForwarded == null || data.isForwarded is bool);
+    }
+
+    function isValidChannel(data, userId) {
+      return data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.description is string && data.description.size() <= 500 &&
+             data.isOwnedByMe is bool &&
+             data.isSubscribed is bool &&
+             data.subscriberCount is int && data.subscriberCount >= 0;
+    }
+
+    function isValidTikTokAnalysis(data, userId) {
+      return data.userId == userId &&
+             data.sourceLabel is string && data.sourceLabel.size() >= 1 && data.sourceLabel.size() <= 160 &&
+             isOptString(data, 'sourceUrl', 500) &&
+             isOptString(data, 'durationFormatted', 40) &&
+             isOptString(data, 'resolutionFormatted', 40) &&
+             data.overallScore is int && data.overallScore >= 0 && data.overallScore <= 100 &&
+             data.hookScore is int && data.hookScore >= 0 && data.hookScore <= 100 &&
+             data.rhythmScore is int && data.rhythmScore >= 0 && data.rhythmScore <= 100 &&
+             data.visualsScore is int && data.visualsScore >= 0 && data.visualsScore <= 100 &&
+             data.summary is string && data.summary.size() <= 2000 &&
+             isOptString(data, 'hashtagsCsv', 400) &&
+             isOptString(data, 'pacingCurveCsv', 200);
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isValidId(userId) && isOwner(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'username', 'birthdayPrivacy', 'timezoneId', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'username', 'bio', 'statusText', 'avatarUri', 'birthDay', 'birthMonth', 'birthdayPrivacy', 'timezoneId', 'createdAt', 'updatedAt']) &&
+                       hasValidTimestampsCreate(incoming()) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isValidId(userId) && isOwner(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       hasValidTimestampsUpdate(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'username', 'bio', 'statusText', 'avatarUri', 'birthDay', 'birthMonth', 'birthdayPrivacy', 'timezoneId', 'updatedAt']);
+
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      match /private/{docId} {
+        allow get: if isValidId(docId) && isOwner(userId);
+        allow list: if isOwner(userId);
+
+        allow create: if isValidId(docId) && isOwner(userId) &&
+                         incoming().keys().hasAll(['userId', 'readReceiptsEnabled', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'countryCode', 'phoneMasked', 'email', 'birthYear', 'readReceiptsEnabled', 'fcmToken', 'fcmTokenUpdatedAtMs', 'createdAt', 'updatedAt']) &&
+                         hasValidTimestampsCreate(incoming()) &&
+                         isValidPrivateAccount(incoming(), userId);
+
+        allow update: if isValidId(docId) && isOwner(userId) &&
+                         isValidPrivateAccount(incoming(), userId) &&
+                         hasValidTimestampsUpdate(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['countryCode', 'phoneMasked', 'email', 'birthYear', 'readReceiptsEnabled', 'fcmToken', 'fcmTokenUpdatedAtMs', 'updatedAt']);
+
+        allow delete: if isValidId(docId) && isOwner(userId);
+      }
+
+      match /contacts/{contactId} {
+        allow get: if isValidId(contactId) && isOwner(userId);
+        allow list: if isOwner(userId);
+
+        allow create: if isValidId(contactId) && isOwner(userId) &&
+                         incoming().keys().hasAll(['userId', 'displayName', 'username', 'isBlocked', 'isReported', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'displayName', 'username', 'bio', 'statusText', 'isBlocked', 'isReported', 'birthDay', 'birthMonth', 'birthdayPrivacy', 'createdAt', 'updatedAt']) &&
+                         hasValidTimestampsCreate(incoming()) &&
+                         isValidContact(incoming(), userId);
+
+        allow update: if isValidId(contactId) && isOwner(userId) &&
+                         isValidContact(incoming(), userId) &&
+                         hasValidTimestampsUpdate(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'username', 'bio', 'statusText', 'isBlocked', 'isReported', 'birthDay', 'birthMonth', 'birthdayPrivacy', 'updatedAt']);
+
+        allow delete: if isValidId(contactId) && isOwner(userId);
+      }
+
+      match /conversations/{conversationId} {
+        allow get: if isValidId(conversationId) && isOwner(userId);
+        allow list: if isOwner(userId);
+
+        allow create: if isValidId(conversationId) && isOwner(userId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'isGroup', 'lastMessageTimeMs', 'unreadCount', 'lastMessageStatus', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'isGroup', 'description', 'participantIdsCsv', 'adminIdsCsv', 'lastMessagePreview', 'lastMessageTimeMs', 'unreadCount', 'lastMessageStatus', 'customWallpaperId', 'createdAt', 'updatedAt']) &&
+                         hasValidTimestampsCreate(incoming()) &&
+                         isValidConversation(incoming(), userId);
+
+        allow update: if isValidId(conversationId) && isOwner(userId) &&
+                         isValidConversation(incoming(), userId) &&
+                         hasValidTimestampsUpdate(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'participantIdsCsv', 'adminIdsCsv', 'lastMessagePreview', 'lastMessageTimeMs', 'unreadCount', 'lastMessageStatus', 'customWallpaperId', 'updatedAt']);
+
+        allow delete: if isValidId(conversationId) && isOwner(userId);
+      }
+
+      match /messages/{messageId} {
+        allow get: if isValidId(messageId) && isOwner(userId);
+        allow list: if isOwner(userId);
+
+        allow create: if isValidId(messageId) && isOwner(userId) &&
+                         incoming().keys().hasAll(['userId', 'conversationId', 'senderId', 'senderName', 'content', 'messageType', 'readStatus', 'sentAtMs', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'conversationId', 'senderId', 'senderName', 'content', 'messageType', 'mediaFileName', 'mediaDurationMs', 'readStatus', 'sentAtMs', 'isEdited', 'isForwarded', 'createdAt', 'updatedAt']) &&
+                         hasValidTimestampsCreate(incoming()) &&
+                         isValidMessage(incoming(), userId);
+
+        allow update: if isValidId(messageId) && isOwner(userId) &&
+                         isValidMessage(incoming(), userId) &&
+                         hasValidTimestampsUpdate(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().conversationId == existing().conversationId &&
+                         incoming().senderId == existing().senderId &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['content', 'readStatus', 'isEdited', 'updatedAt']);
+
+        allow delete: if isValidId(messageId) && isOwner(userId);
+      }
+
+      match /channels/{channelId} {
+        allow get: if isValidId(channelId) && isOwner(userId);
+        allow list: if isOwner(userId);
+
+        allow create: if isValidId(channelId) && isOwner(userId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'description', 'isOwnedByMe', 'isSubscribed', 'subscriberCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'description', 'isOwnedByMe', 'isSubscribed', 'subscriberCount', 'createdAt', 'updatedAt']) &&
+                         hasValidTimestampsCreate(incoming()) &&
+                         isValidChannel(incoming(), userId);
+
+        allow update: if isValidId(channelId) && isOwner(userId) &&
+                         isValidChannel(incoming(), userId) &&
+                         hasValidTimestampsUpdate(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'isSubscribed', 'subscriberCount', 'updatedAt']);
+
+        allow delete: if isValidId(channelId) && isOwner(userId);
+      }
+
+      match /tiktokAnalyses/{analysisId} {
+        allow get: if isValidId(analysisId) && isOwner(userId);
+        allow list: if isOwner(userId);
+
+        allow create: if isValidId(analysisId) && isOwner(userId) &&
+                         incoming().keys().hasAll(['userId', 'sourceLabel', 'overallScore', 'hookScore', 'rhythmScore', 'visualsScore', 'summary', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'sourceLabel', 'sourceUrl', 'durationFormatted', 'resolutionFormatted', 'overallScore', 'hookScore', 'rhythmScore', 'visualsScore', 'summary', 'hashtagsCsv', 'pacingCurveCsv', 'createdAt', 'updatedAt']) &&
+                         hasValidTimestampsCreate(incoming()) &&
+                         isValidTikTokAnalysis(incoming(), userId);
+
+        allow update: if isValidId(analysisId) && isOwner(userId) &&
+                         isValidTikTokAnalysis(incoming(), userId) &&
+                         hasValidTimestampsUpdate(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['summary', 'hashtagsCsv', 'pacingCurveCsv', 'updatedAt']);
+
+        allow delete: if isValidId(analysisId) && isOwner(userId);
+      }
+    }
+  }
+}

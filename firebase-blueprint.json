@@ -1,0 +1,177 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public-safe user profile metadata scoped by authenticated UID. Birth year and phone/email PII are isolated under private/account.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Display name (2..80 chars)" },
+        "username": { "type": "string", "description": "Unique handle without @ (2..40 chars)" },
+        "bio": { "type": "string", "description": "User bio (0..240 chars)" },
+        "statusText": { "type": "string", "description": "Availability status text (0..120 chars)" },
+        "avatarUri": { "type": "string", "description": "Optional avatar URI/URL" },
+        "birthDay": { "type": "integer", "description": "Optional day of birth (1..31)" },
+        "birthMonth": { "type": "integer", "description": "Optional month of birth (1..12)" },
+        "birthdayPrivacy": {
+          "type": "string",
+          "enum": ["NOBODY", "CONTACTS", "EVERYONE"],
+          "description": "Audience allowed to view birthday day/month"
+        },
+        "timezoneId": { "type": "string", "description": "IANA timezone ID e.g. Europe/Paris" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on create" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on create/update" }
+      },
+      "required": ["userId", "displayName", "username", "birthdayPrivacy", "timezoneId", "createdAt", "updatedAt"]
+    },
+    "UserPrivateAccount": {
+      "title": "UserPrivateAccount",
+      "description": "Strictly owner-only PII & private settings including birth year and phone metadata.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "countryCode": { "type": "string" },
+        "phoneMasked": { "type": "string" },
+        "email": { "type": "string" },
+        "birthYear": { "type": "integer" },
+        "readReceiptsEnabled": { "type": "boolean" },
+        "fcmToken": { "type": "string", "description": "Latest FCM registration token for push notifications" },
+        "fcmTokenUpdatedAtMs": { "type": "integer", "description": "Epoch milliseconds when FCM token was synced" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "readReceiptsEnabled", "createdAt", "updatedAt"]
+    },
+    "ContactRecord": {
+      "title": "ContactRecord",
+      "description": "User-saved contact with optional birthday day/month and privacy/block flags.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "username": { "type": "string" },
+        "bio": { "type": "string" },
+        "statusText": { "type": "string" },
+        "isBlocked": { "type": "boolean" },
+        "isReported": { "type": "boolean" },
+        "birthDay": { "type": "integer" },
+        "birthMonth": { "type": "integer" },
+        "birthdayPrivacy": { "type": "string", "enum": ["NOBODY", "CONTACTS", "EVERYONE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "username", "isBlocked", "isReported", "createdAt", "updatedAt"]
+    },
+    "ConversationRecord": {
+      "title": "ConversationRecord",
+      "description": "Direct or group conversation metadata synced for an authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "isGroup": { "type": "boolean" },
+        "description": { "type": "string" },
+        "participantIdsCsv": { "type": "string" },
+        "adminIdsCsv": { "type": "string" },
+        "lastMessagePreview": { "type": "string" },
+        "lastMessageTimeMs": { "type": "integer" },
+        "unreadCount": { "type": "integer" },
+        "lastMessageStatus": { "type": "string", "enum": ["PENDING", "SENT", "DELIVERED", "READ"] },
+        "customWallpaperId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "isGroup", "lastMessageTimeMs", "unreadCount", "lastMessageStatus", "createdAt", "updatedAt"]
+    },
+    "MessageRecord": {
+      "title": "MessageRecord",
+      "description": "Synced chat message metadata belonging to a user's conversation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "content": { "type": "string" },
+        "messageType": { "type": "string", "enum": ["TEXT", "IMAGE", "VIDEO", "FILE", "VOICE", "STICKER"] },
+        "mediaFileName": { "type": "string" },
+        "mediaDurationMs": { "type": "integer" },
+        "readStatus": { "type": "string", "enum": ["PENDING", "SENT", "DELIVERED", "READ"] },
+        "sentAtMs": { "type": "integer" },
+        "isEdited": { "type": "boolean" },
+        "isForwarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "conversationId", "senderId", "senderName", "content", "messageType", "readStatus", "sentAtMs", "createdAt", "updatedAt"]
+    },
+    "ChannelRecord": {
+      "title": "ChannelRecord",
+      "description": "Prunelle broadcast channel owned or subscribed by user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "isOwnedByMe": { "type": "boolean" },
+        "isSubscribed": { "type": "boolean" },
+        "subscriberCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "description", "isOwnedByMe", "isSubscribed", "subscriberCount", "createdAt", "updatedAt"]
+    },
+    "TikTokAnalysisRecord": {
+      "title": "TikTokAnalysisRecord",
+      "description": "Persisted cloud backup of Prunelle TikTok AI analysis reports.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "sourceLabel": { "type": "string" },
+        "sourceUrl": { "type": "string" },
+        "durationFormatted": { "type": "string" },
+        "resolutionFormatted": { "type": "string" },
+        "overallScore": { "type": "integer" },
+        "hookScore": { "type": "integer" },
+        "rhythmScore": { "type": "integer" },
+        "visualsScore": { "type": "integer" },
+        "summary": { "type": "string" },
+        "hashtagsCsv": { "type": "string" },
+        "pacingCurveCsv": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "sourceLabel", "overallScore", "hookScore", "rhythmScore", "visualsScore", "summary", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profile document."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateAccount" },
+      "description": "Isolated PII & private settings for the authenticated user."
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/ContactRecord" },
+      "description": "Authenticated user's saved contacts."
+    },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/ConversationRecord" },
+      "description": "Authenticated user's conversations and groups."
+    },
+    "/users/{userId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/MessageRecord" },
+      "description": "Authenticated user's synced messages."
+    },
+    "/users/{userId}/channels/{channelId}": {
+      "schema": { "$ref": "#/entities/ChannelRecord" },
+      "description": "Authenticated user's channels."
+    },
+    "/users/{userId}/tiktokAnalyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/TikTokAnalysisRecord" },
+      "description": "Authenticated user's TikTok AI reports."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Prunelle",
+  "description": "Application de messagerie instantanée moderne, élégante et fluide avec appels, chaînes, statuts, fonds d'écran animés 4K et IA intégrée.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
